@@ -98,7 +98,7 @@ function AuthPage({ dark, toggleTheme }) {
                 }}
                 c={dark ? "#f8f9fa" : "#1e293b"}
             >
-                AWS Connections bro
+                AWS Connections
             </Title>
 
             {awsCredentials && (
