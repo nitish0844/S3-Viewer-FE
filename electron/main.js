@@ -195,14 +195,6 @@ ipcMain.handle(
 
   async (_, filePath) => {
 
-    console.log(
-      "Reading file:"
-    );
-
-    console.log(
-      filePath
-    );
-
     const buffer =
       fs.readFileSync(
         filePath
@@ -366,14 +358,6 @@ autoUpdater.on(
   "download-progress",
 
   (progress) => {
-
-    console.log(
-      "Download progress"
-    );
-
-    console.log(
-      progress.percent
-    );
 
     mainWindow
       .webContents
