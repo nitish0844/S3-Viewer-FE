@@ -5,122 +5,435 @@ import keytar from "keytar";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
-const __filename = fileURLToPath(import.meta.url);
+import pkg from "electron-updater";
 
-const __dirname = path.dirname(__filename);
+const { autoUpdater } = pkg;
+
+autoUpdater.autoDownload = false;
+// =========================
+// PATHS
+// =========================
+
+const __filename =
+  fileURLToPath(
+    import.meta.url
+  );
+
+const __dirname =
+  path.dirname(
+    __filename
+  );
+
+
+// =========================
+// GLOBAL WINDOW
+// =========================
+
+let mainWindow;
 
 // =========================
 // FILE PICKER
 // =========================
-ipcMain.handle("select-file", async () => {
-  const result = await dialog.showOpenDialog({
-    properties: ["openFile"],
-  });
 
-  return result.filePaths;
-});
+ipcMain.handle(
+  "select-file",
+
+  async () => {
+
+    const result =
+      await dialog
+        .showOpenDialog({
+
+          properties: [
+            "openFile"
+          ],
+        });
+
+    return result.filePaths;
+  }
+);
+
 
 // =========================
 // GET AWS KEYCHAIN
 // =========================
-ipcMain.handle("get-aws-keychain", async () => {
-  return new Promise((resolve, reject) => {
-    exec(
-      `security find-internet-password -s s3.amazonaws.com -g`,
 
-      (error, stdout, stderr) => {
-        if (error) {
-          console.error(error);
+ipcMain.handle(
+  "get-aws-keychain",
 
-          reject(error.message);
+  async () => {
 
-          return;
-        }
+    return new Promise(
 
-        // Extract access key
-        const accessKeyMatch = stdout.match(/"acct"<blob>="([^"]+)"/);
+      (
+        resolve,
+        reject
+      ) => {
 
-        // Extract secret key
-        const secretKeyMatch = stderr.match(/password: "([^"]+)"/);
+        exec(
 
-        resolve({
-          access_key: accessKeyMatch?.[1] || "",
+          `security find-internet-password -s s3.amazonaws.com -g`,
 
-          secret_key: secretKeyMatch?.[1] || "",
-        });
-      },
+          (
+            error,
+            stdout,
+            stderr
+          ) => {
+
+            if (error) {
+
+              console.error(
+                error
+              );
+
+              reject(
+                error.message
+              );
+
+              return;
+            }
+
+            // Extract access key
+            const accessKeyMatch =
+              stdout.match(
+
+                /"acct"<blob>="([^"]+)"/
+              );
+
+            // Extract secret key
+            const secretKeyMatch =
+              stderr.match(
+
+                /password: "([^"]+)"/
+              );
+
+            resolve({
+
+              access_key:
+                accessKeyMatch?.[1]
+                || "",
+
+              secret_key:
+                secretKeyMatch?.[1]
+                || "",
+            });
+          }
+        );
+      }
     );
-  });
-});
+  }
+);
 
-ipcMain.handle("save-session", async (_, data) => {
-  await keytar.setPassword(
-    "s3-explorer-session",
 
-    data.access_key,
+// =========================
+// SESSION STORAGE
+// =========================
 
-    data.session_id,
-  );
+ipcMain.handle(
+  "save-session",
 
-  return true;
-});
+  async (_, data) => {
 
-ipcMain.handle("get-session", async (_, access_key) => {
-  const session = await keytar.getPassword(
-    "s3-explorer-session",
+    await keytar
+      .setPassword(
 
-    access_key,
-  );
+        "s3-explorer-session",
 
-  return session;
-});
+        data.access_key,
 
-ipcMain.handle("delete-session", async (_, access_key) => {
-  await keytar.deletePassword(
-    "s3-explorer-session",
+        data.session_id
+      );
 
-    access_key,
-  );
+    return true;
+  }
+);
 
-  return true;
-});
 
-ipcMain.handle("read-file", async (_, filePath) => {
-  console.log("Reading file:");
+ipcMain.handle(
+  "get-session",
 
-  console.log(filePath);
+  async (_, access_key) => {
 
-  const buffer = fs.readFileSync(filePath);
+    const session =
+      await keytar
+        .getPassword(
 
-  return Array.from(buffer);
-});
+          "s3-explorer-session",
+
+          access_key
+        );
+
+    return session;
+  }
+);
+
+
+ipcMain.handle(
+  "delete-session",
+
+  async (_, access_key) => {
+
+    await keytar
+      .deletePassword(
+
+        "s3-explorer-session",
+
+        access_key
+      );
+
+    return true;
+  }
+);
+
+
+// =========================
+// READ FILE
+// =========================
+
+ipcMain.handle(
+  "read-file",
+
+  async (_, filePath) => {
+
+    console.log(
+      "Reading file:"
+    );
+
+    console.log(
+      filePath
+    );
+
+    const buffer =
+      fs.readFileSync(
+        filePath
+      );
+
+    return Array.from(
+      buffer
+    );
+  }
+);
+
+
+// =========================
+// START UPDATE
+// =========================
+
+ipcMain.handle(
+  "start-update",
+
+  async () => {
+
+    console.log(
+      "Starting update download..."
+    );
+
+    autoUpdater
+      .downloadUpdate();
+  }
+);
+
+
+// =========================
+// INSTALL UPDATE
+// =========================
+
+ipcMain.handle(
+  "install-update",
+
+  async () => {
+
+    console.log(
+      "Installing update..."
+    );
+
+    autoUpdater
+      .quitAndInstall();
+  }
+);
+
 
 // =========================
 // CREATE WINDOW
 // =========================
 function createWindow() {
-  const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
 
-    webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
+  mainWindow =
+    new BrowserWindow({
 
-      contextIsolation: true,
+      width: 1200,
 
-      nodeIntegration: false,
-    },
-  });
+      height: 800,
 
-  const isDev = !app.isPackaged;
-  
+      webPreferences: {
+
+        preload: path.join(
+          __dirname,
+          "preload.cjs"
+        ),
+
+        contextIsolation: true,
+
+        nodeIntegration: false,
+      },
+    });
+
+
+  const isDev =
+    !app.isPackaged;
+
 
   if (isDev) {
-    win.webContents.openDevTools();
-    win.loadURL("http://localhost:5173");
+
+    mainWindow
+      .webContents
+      .openDevTools();
+
+    mainWindow
+      .loadURL(
+        "http://localhost:5173"
+      );
+
   } else {
-    win.loadFile(path.join(__dirname, "../dist/index.html"));
+
+    mainWindow
+      .loadFile(
+
+        path.join(
+          app.getAppPath(),
+          "dist/index.html"
+        )
+      );
   }
 }
 
-app.whenReady().then(createWindow);
+
+// =========================
+// AUTO UPDATER EVENTS
+// =========================
+
+autoUpdater.on(
+
+  "checking-for-update",
+
+  () => {
+
+    console.log(
+      "Checking for updates..."
+    );
+  }
+);
+
+
+autoUpdater.on(
+
+  "update-available",
+
+  (info) => {
+
+    console.log(
+      "Update available"
+    );
+
+    console.log(
+      info
+    );
+
+    mainWindow
+      .webContents
+      .send(
+        "update-available"
+      );
+  }
+);
+
+
+autoUpdater.on(
+
+  "update-not-available",
+
+  () => {
+
+    console.log(
+      "No updates available"
+    );
+  }
+);
+
+
+autoUpdater.on(
+
+  "download-progress",
+
+  (progress) => {
+
+    console.log(
+      "Download progress"
+    );
+
+    console.log(
+      progress.percent
+    );
+
+    mainWindow
+      .webContents
+      .send(
+
+        "update-progress",
+
+        progress.percent
+      );
+  }
+);
+
+
+autoUpdater.on(
+
+  "update-downloaded",
+
+  () => {
+
+    console.log(
+      "Update downloaded"
+    );
+
+    mainWindow
+      .webContents
+      .send(
+        "update-downloaded"
+      );
+  }
+);
+
+
+autoUpdater.on(
+
+  "error",
+
+  (error) => {
+
+    console.log(
+      "Updater error"
+    );
+
+    console.log(
+      error
+    );
+  }
+);
+
+
+// =========================
+// APP READY
+// =========================
+
+app.whenReady().then(
+
+  () => {
+
+    createWindow();
+
+    autoUpdater
+      .checkForUpdates();
+  }
+);
