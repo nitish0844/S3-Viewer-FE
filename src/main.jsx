@@ -4,6 +4,8 @@ import App from "./App";
 import "./index.css";
 import "@mantine/core/styles.css";
 import { HashRouter } from "react-router-dom";
+import '@mantine/dropzone/styles.css';
+import '@mantine/notifications/styles.css';
 
 import {
   QueryClient,

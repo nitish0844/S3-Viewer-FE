@@ -6,11 +6,13 @@ import ExplorerPage from "./pages/ExplorerPage";
 import { useEffect } from "react";
 import api from "./api/axios";
 import StartupScreen from "./components/StartupScreen";
+import { Notifications } from '@mantine/notifications';
 
 
 function App() {
   const [dark, setDark] = useState(false);
   const [serverReady, setServerReady] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
 
   const toggleTheme = () => {
     setDark(!dark);
@@ -48,6 +50,24 @@ function App() {
     checkHealth();
   }, []);
 
+  useEffect(() => {
+
+    window.electronAPI
+      .onUpdateAvailable(
+        () => {
+
+          console.log(
+            "UPDATE RECEIVED"
+          );
+
+          setUpdateAvailable(
+            true
+          );
+        }
+      );
+
+  }, []);
+
   return (
 
     <MantineProvider
@@ -57,6 +77,7 @@ function App() {
           : "light"
       }
     >
+      <Notifications />
 
       {!serverReady ? (
           <StartupScreen />
@@ -84,10 +105,28 @@ function App() {
                     }
                   />
                 }
-              />
+            />
 
-            </Routes>
-          )
+            {
+              updateAvailable && (
+
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 20,
+                    right: 20,
+                    background: "white",
+                    padding: 20,
+                    zIndex: 9999,
+                  }}
+                >
+                  Update Available
+                </div>
+              )
+            }
+
+          </Routes>
+        )
       }
     </MantineProvider>
   );

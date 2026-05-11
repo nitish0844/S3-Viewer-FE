@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import {
     Title,
@@ -15,6 +15,8 @@ import {
     Menu,
     Modal,
 } from "@mantine/core";
+
+import { notifications } from "@mantine/notifications";
 
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -51,6 +53,12 @@ function ExplorerPage({ dark, toggleTheme }) {
         (state) => state.clearSession
     );
 
+    const [dragActive, setDragActive] = useState(false);
+
+    const [draggedFiles, setDraggedFiles] = useState([]);
+
+    const [uploadConfirmOpen, setUploadConfirmOpen] = useState(false);
+
     const [selectedBucket, setSelectedBucket] =
         useState(null);
 
@@ -76,7 +84,6 @@ function ExplorerPage({ dark, toggleTheme }) {
                 );
                 return response.data.buckets;
             } catch (error) {
-                console.error(error);
                 if (
                     error.response?.status === 401
                 ) {
@@ -85,6 +92,128 @@ function ExplorerPage({ dark, toggleTheme }) {
                 }
                 throw error;
             }
+        },
+    });
+
+    useEffect(() => {
+
+        const handleDragOver = (e) => {
+
+            e.preventDefault();
+
+            if (
+                e.dataTransfer?.types.includes(
+                    "Files"
+                )
+            ) {
+                setDragActive(true);
+            }
+        };
+
+        const handleDrop = () => {
+            setDragActive(false);
+        };
+
+        const handleDragEnd = () => {
+            setDragActive(false);
+        };
+
+        window.addEventListener(
+            "dragover",
+            handleDragOver
+        );
+
+        window.addEventListener(
+            "drop",
+            handleDrop
+        );
+
+        window.addEventListener(
+            "dragend",
+            handleDragEnd
+        );
+
+        return () => {
+
+            window.removeEventListener(
+                "dragover",
+                handleDragOver
+            );
+
+            window.removeEventListener(
+                "drop",
+                handleDrop
+            );
+
+            window.removeEventListener(
+                "dragend",
+                handleDragEnd
+            );
+        };
+
+    }, []);
+
+    const dragUploadMutation = useMutation({
+        mutationFn: async () => {
+            if (!draggedFiles.length) {
+                return;
+            }
+            const file = draggedFiles[0];
+            const formData = new FormData();
+            formData.append(
+                "session_id",
+                sessionId
+            );
+            formData.append(
+                "bucket",
+                selectedBucket
+            );
+            formData.append(
+                "prefix",
+                currentPath
+            );
+            formData.append(
+                "file",
+                file,
+                file.name
+            );
+            const response = await api.post(
+                "/upload",
+                formData,
+                {
+                    headers: {
+                        "Content-Type":
+                            "multipart/form-data",
+                    },
+                }
+            );
+            return response.data;
+        },
+        onSuccess: () => {
+            notifications.show({
+                color: "green",
+                title: "Upload Success",
+                message: "File uploaded successfully",
+                autoClose: 5000,
+                withCloseButton: true,
+                position: "top-right"
+            });
+            setUploadConfirmOpen(false);
+            setDraggedFiles([]);
+            objectsQuery.refetch();
+        },
+        onError: (error) => {
+            notifications.show({
+                color: "red",
+                title: "Upload Failed",
+                autoClose: 5000,
+                withCloseButton: true,
+                position: "top-right",
+                message:
+                    error?.response?.data?.message ||
+                    error.message ||
+                    "Something went wrong",
+            });
         },
     });
 
@@ -132,11 +261,6 @@ function ExplorerPage({ dark, toggleTheme }) {
                     );
 
                 if (!confirmed) {
-
-                    console.log(
-                        "Upload cancelled"
-                    );
-
                     return;
                 }
             }
@@ -186,10 +310,6 @@ function ExplorerPage({ dark, toggleTheme }) {
                 fileName
             );
 
-            console.log(
-                "Uploading file..."
-            );
-
             const response = await api.post(
                 "/upload",
                 formData,
@@ -200,43 +320,36 @@ function ExplorerPage({ dark, toggleTheme }) {
                     },
                 }
             );
-
-            console.log(
-                "Upload response:"
-            );
-
-            console.log(response.data);
-
             return response.data;
         },
-
-
         onSuccess: () => {
-
-            console.log(
-                "Upload success"
-            );
-
+            notifications.show({
+                color: "green",
+                title: "Upload Success",
+                message: "File uploaded successfully",
+                autoClose: 5000,
+                withCloseButton: true,
+                position: "top-right"
+            });
             objectsQuery.refetch();
         },
-
-
         onError: (error) => {
-
-            console.error(
-                "Upload failed"
-            );
-
-            console.error(error);
+            notifications.show({
+                color: "red",
+                title: "Upload Failed",
+                autoClose: 5000,
+                withCloseButton: true,
+                position: "top-right",
+                message:
+                    error?.response?.data?.message ||
+                    error.message ||
+                    "Something went wrong",
+            });
         },
     });
 
     const deleteMutation = useMutation({
         mutationFn: async () => {
-            console.log(
-                "Deleting file..."
-            );
-            console.log(selectedFile);
             const response = await api.post(
                 "/delete-file",
                 {
@@ -248,18 +361,30 @@ function ExplorerPage({ dark, toggleTheme }) {
             return response.data;
         },
         onSuccess: () => {
-            console.log(
-                "File deleted"
-            );
             setDeleteModalOpen(false);
             setSelectedFile(null);
+            notifications.show({
+                color: "green",
+                title: "Delete Success",
+                message: "File deleted successfully",
+                autoClose: 5000,
+                withCloseButton: true,
+                position: "top-right"
+            })
             objectsQuery.refetch();
         },
         onError: (error) => {
-            console.error(
-                "Delete failed"
-            );
-            console.error(error);
+            notifications.show({
+                color: "red",
+                title: "Delete Failed",
+                message:
+                    error?.response?.data?.message ||
+                    error.message ||
+                    "Something went wrong",
+                autoClose: 5000,
+                withCloseButton: true,
+                position: "top-right"
+            })
         },
     });
 
@@ -267,33 +392,16 @@ function ExplorerPage({ dark, toggleTheme }) {
     // FETCH OBJECTS
     // =========================
     const objectsQuery = useQuery({
-
         queryKey: [
             "objects",
             selectedBucket,
             currentPath,
         ],
-
         enabled: !!selectedBucket,
-
         staleTime: 0,
-
         gcTime: 0,
-
         refetchOnWindowFocus: false,
-
         queryFn: async () => {
-
-            console.log(
-                "Fetching objects..."
-            );
-
-            console.log({
-                sessionId,
-                selectedBucket,
-                currentPath,
-            });
-
             const response = await api.post(
                 "/objects",
                 {
@@ -302,9 +410,6 @@ function ExplorerPage({ dark, toggleTheme }) {
                     prefix: currentPath,
                 }
             );
-
-            console.log(response.data);
-
             return response.data;
         },
     });
@@ -315,21 +420,12 @@ function ExplorerPage({ dark, toggleTheme }) {
     // =========================
 
     const goBack = () => {
-
-        console.log("Going back...");
-
         // =========================
         // BACK TO BUCKETS
         // =========================
 
         if (!currentPath) {
-
-            console.log(
-                "Returning to buckets"
-            );
-
             setSelectedBucket(null);
-
             return;
         }
 
@@ -356,13 +452,6 @@ function ExplorerPage({ dark, toggleTheme }) {
                 ? parts.join("/") + "/"
 
                 : "";
-
-        console.log(
-            "Previous path:"
-        );
-
-        console.log(previousPath);
-
         setCurrentPath(previousPath);
     };
 
@@ -372,197 +461,212 @@ function ExplorerPage({ dark, toggleTheme }) {
     // =========================
 
     const openFolder = (folder) => {
-
-        console.log(
-            "Opening folder:"
-        );
-
-        console.log(folder);
-
         setCurrentPath(folder);
     };
 
 
     return (
-
         <AppShellLayout
             dark={dark}
             toggleTheme={toggleTheme}
         >
 
+
+            {dragActive && (
+                <div
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                    }}
+                    onDragLeave={(e) => {
+
+                        if (
+                            e.clientX <= 0 ||
+                            e.clientY <= 0 ||
+                            e.clientX >= window.innerWidth ||
+                            e.clientY >= window.innerHeight
+                        ) {
+                            setDragActive(false);
+                        }
+                    }}
+                    onDrop={(e) => {
+
+                        e.preventDefault();
+
+                        setDragActive(false);
+
+                        if (!selectedBucket) {
+
+                            notifications.show({
+                                color: "red",
+                                title: "No Bucket Selected",
+                                message:
+                                    "Please open a bucket first",
+                            });
+
+                            return;
+                        }
+
+                        const files =
+                            Array.from(
+                                e.dataTransfer.files
+                            );
+
+                        if (!files.length) {
+                            return;
+                        }
+
+                        setDraggedFiles(files);
+
+                        setUploadConfirmOpen(true);
+                    }}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background:
+                            "rgba(0,0,0,0.75)",
+                        zIndex: 9999,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "column",
+                        backdropFilter: "blur(4px)",
+                    }}
+                >
+                    <IconUpload
+                        size={90}
+                        color="white"
+                    />
+
+                    <Text
+                        c="white"
+                        size="xl"
+                        fw={700}
+                        mt="md"
+                    >
+                        Drag & Drop to Upload
+                    </Text>
+                </div>
+            )}
             <Group
                 justify="space-between"
                 mb="xl"
             >
-
                 <Group gap="xs">
+                    {selectedBucket && (
+                        <ThemeIcon
+                            variant="subtle"
+                            size={34}
+                            radius="xl"
+                            style={{
+                                cursor: "pointer",
+                            }}
+                            onClick={goBack}
+                        >
+                            <IconArrowLeft size={20} />
+                        </ThemeIcon>
+                    )}
 
-                    {
-                        selectedBucket && (
-
-                            <ThemeIcon
-                                variant="subtle"
-                                size={34}
-                                radius="xl"
-                                style={{
-                                    cursor: "pointer",
-                                }}
-                                onClick={goBack}
-                            >
-
-                                <IconArrowLeft
-                                    size={20}
-                                />
-
-                            </ThemeIcon>
-                        )
-                    }
-
-
-                    <Title
-                        order={2}
-                        fw={800}
-                    >
+                    <Title order={2} fw={800}>
                         Bucket Explorer
                     </Title>
-
                 </Group>
 
 
-                {
-                    selectedBucket && (
-
-                        <Button
-                            color="orange"
-                            leftSection={
-                                <IconUpload
-                                    size={16}
-                                />
-                            }
-                            loading={
-                                uploadMutation.isPending
-                            }
-                            onClick={() =>
-                                uploadMutation.mutate()
-                            }
-                        >
-                            Upload
-                        </Button>
-                    )
+                {selectedBucket && (
+                    <Button
+                        color="orange"
+                        leftSection={
+                            <IconUpload
+                                size={16}
+                            />
+                        }
+                        loading={
+                            uploadMutation.isPending
+                        }
+                        onClick={() =>
+                            uploadMutation.mutate()
+                        }
+                    >
+                        Upload
+                    </Button>
+                )
                 }
-
             </Group>
-
-
             {/* ========================= */}
             {/* BUCKET LOADER */}
             {/* ========================= */}
 
-            {
-                bucketsQuery.isLoading && (
-
-                    <Center mt={100}>
-
-                        <Stack align="center">
-
-                            <Loader
-                                color="orange"
-                                size="lg"
-                            />
-
-                            <Text c="dimmed">
-                                Loading buckets...
-                            </Text>
-
-                        </Stack>
-
-                    </Center>
-                )
+            {bucketsQuery.isLoading && (
+                <Center mt={100}>
+                    <Stack align="center">
+                        <Loader
+                            color="orange"
+                            size="lg"
+                        />
+                        <Text c="dimmed">
+                            Loading buckets...
+                        </Text>
+                    </Stack>
+                </Center>
+            )
             }
-
 
             {/* ========================= */}
             {/* BUCKETS */}
             {/* ========================= */}
 
-            {
-                !selectedBucket &&
-                bucketsQuery.data && (
-
-                    <SimpleGrid
-                        cols={3}
-                        spacing="lg"
-                    >
-
-                        {
-                            bucketsQuery.data.map(
-                                (bucket) => (
-
-                                    <Card
-                                        key={bucket}
-                                        shadow="sm"
-                                        radius="lg"
-                                        padding="lg"
-                                        withBorder
-                                        style={{
-                                            cursor: "pointer",
-                                        }}
-                                        onDoubleClick={() => {
-
-                                            console.log(
-                                                "Selected bucket:"
-                                            );
-
-                                            console.log(bucket);
-
-                                            setSelectedBucket(bucket);
-
-                                            setCurrentPath("");
-                                        }}
+            {!selectedBucket && bucketsQuery.data && (
+                <SimpleGrid
+                    cols={3}
+                    spacing="lg"
+                >
+                    {bucketsQuery.data.map(
+                        (bucket) => (
+                            <Card
+                                key={bucket}
+                                shadow="sm"
+                                radius="lg"
+                                padding="lg"
+                                withBorder
+                                style={{
+                                    cursor: "pointer",
+                                }}
+                                onDoubleClick={() => {
+                                    setSelectedBucket(bucket);
+                                    setCurrentPath("");
+                                }}
+                            >
+                                <Group>
+                                    <ThemeIcon
+                                        color="orange"
+                                        variant="light"
+                                        size={50}
+                                        radius="xl"
                                     >
+                                        <IconFolder
+                                            size={26}
+                                        />
+                                    </ThemeIcon>
 
-                                        <Group>
-
-                                            <ThemeIcon
-                                                color="orange"
-                                                variant="light"
-                                                size={50}
-                                                radius="xl"
-                                            >
-
-                                                <IconFolder
-                                                    size={26}
-                                                />
-
-                                            </ThemeIcon>
-
-
-                                            <div>
-
-                                                <Text fw={700}>
-                                                    {bucket}
-                                                </Text>
-
-                                                <Text
-                                                    size="sm"
-                                                    c="dimmed"
-                                                >
-                                                    AWS S3 Bucket
-                                                </Text>
-
-                                            </div>
-
-                                        </Group>
-
-                                    </Card>
-                                )
-                            )
-                        }
-
-                    </SimpleGrid>
-                )
+                                    <div>
+                                        <Text fw={700}>
+                                            {bucket}
+                                        </Text>
+                                        <Text
+                                            size="sm"
+                                            c="dimmed"
+                                        >
+                                            AWS S3 Bucket
+                                        </Text>
+                                    </div>
+                                </Group>
+                            </Card>
+                        )
+                    )
+                    }
+                </SimpleGrid>
+            )
             }
-
 
             {/* ========================= */}
             {/* OBJECTS LOADER */}
@@ -690,175 +794,127 @@ function ExplorerPage({ dark, toggleTheme }) {
 
                             {/* FILES */}
 
-                            {
-                                objectsQuery.data.files.map(
-                                    (file) => (
-
-                                        <Card
-                                            key={file.name}
-                                            shadow="sm"
-                                            radius="lg"
-                                            padding="lg"
-                                            withBorder
+                            {objectsQuery.data.files.map(
+                                (file) => (
+                                    <Card
+                                        key={file.name}
+                                        shadow="sm"
+                                        radius="lg"
+                                        padding="lg"
+                                        withBorder
+                                    >
+                                        <div
+                                            style={{
+                                                position: "relative",
+                                            }}
                                         >
-
+                                            {/* TOP RIGHT MENU */}
                                             <div
                                                 style={{
-                                                    position: "relative",
+                                                    position: "absolute",
+                                                    top: 0,
+                                                    right: 0,
+                                                    zIndex: 10,
                                                 }}
                                             >
-
-                                                {/* TOP RIGHT MENU */}
-
-                                                <div
-                                                    style={{
-                                                        position: "absolute",
-                                                        top: 0,
-                                                        right: 0,
-                                                        zIndex: 10,
-                                                    }}
+                                                <Menu
+                                                    shadow="md"
+                                                    width={180}
                                                 >
-
-                                                    <Menu
-                                                        shadow="md"
-                                                        width={180}
-                                                    >
-
-                                                        <Menu.Target>
-
-                                                            <ThemeIcon
-                                                                variant="subtle"
-                                                                style={{
-                                                                    cursor: "pointer",
-                                                                }}
-                                                            >
-
-                                                                <IconDotsVertical
-                                                                    size={18}
+                                                    <Menu.Target>
+                                                        <ThemeIcon
+                                                            variant="subtle"
+                                                            style={{
+                                                                cursor: "pointer",
+                                                            }}
+                                                        >
+                                                            <IconDotsVertical size={18} />
+                                                        </ThemeIcon>
+                                                    </Menu.Target>
+                                                    <Menu.Dropdown>
+                                                        <Menu.Item
+                                                            color="red"
+                                                            leftSection={
+                                                                <IconTrash
+                                                                    size={16}
                                                                 />
-
-                                                            </ThemeIcon>
-
-                                                        </Menu.Target>
-
-
-                                                        <Menu.Dropdown>
-
-                                                            <Menu.Item
-
-                                                                color="red"
-
-                                                                leftSection={
-                                                                    <IconTrash
-                                                                        size={16}
-                                                                    />
-                                                                }
-
-                                                                onClick={() => {
-
-                                                                    setSelectedFile(
-                                                                        file
-                                                                    );
-
-                                                                    setDeleteModalOpen(
-                                                                        true
-                                                                    );
-                                                                }}
-                                                            >
-                                                                Delete
-                                                            </Menu.Item>
-
-                                                        </Menu.Dropdown>
-
-                                                    </Menu>
-
-                                                </div>
-
-
-                                                {/* FILE CONTENT */}
-
-                                                <Group
-                                                    align="flex-start"
-                                                >
-
-                                                    <ThemeIcon
-                                                        color="blue"
-                                                        variant="light"
-                                                        size={50}
-                                                        radius="xl"
-                                                    >
-
-                                                        <IconFile
-                                                            size={24}
-                                                        />
-
-                                                    </ThemeIcon>
-
-
-                                                    <div>
-
-                                                        <Text fw={700}>
-
-                                                            {
-                                                                file.name.replace(
-                                                                    currentPath,
-                                                                    ""
-                                                                )
                                                             }
-
-                                                        </Text>
-
-
-                                                        <Text
-                                                            size="sm"
-                                                            c="dimmed"
+                                                            onClick={() => {
+                                                                setSelectedFile(
+                                                                    file
+                                                                );
+                                                                setDeleteModalOpen(
+                                                                    true
+                                                                );
+                                                            }}
                                                         >
-
-                                                            {
-                                                                (
-                                                                    file.size /
-                                                                    1024 /
-                                                                    1024
-                                                                ).toFixed(2)
-                                                            }
-                                                            {" "}
-                                                            MB
-
-                                                        </Text>
-
-
-                                                        <Text
-                                                            size="xs"
-                                                            c="dimmed"
-                                                            mt={4}
-                                                        >
-
-                                                            Uploaded:
-                                                            {" "}
-
-                                                            {
-                                                                dayjs(
-                                                                    file.last_modified
-                                                                )
-                                                                    .tz(
-                                                                        "Asia/Kolkata"
-                                                                    )
-                                                                    .format(
-                                                                        "DD MMM YYYY hh:mm A"
-                                                                    )
-                                                            }
-
-                                                        </Text>
-
-                                                    </div>
-
-                                                </Group>
-
+                                                            Delete
+                                                        </Menu.Item>
+                                                    </Menu.Dropdown>
+                                                </Menu>
                                             </div>
+                                            {/* FILE CONTENT */}
 
-                                        </Card>
-                                    )
+                                            <Group align="flex-start" >
+                                                <ThemeIcon
+                                                    color="blue"
+                                                    variant="light"
+                                                    size={50}
+                                                    radius="xl"
+                                                >
+                                                    <IconFile size={24} />
+                                                </ThemeIcon>
+
+                                                <div>
+                                                    <Text fw={700}>
+                                                        {
+                                                            file.name.replace(
+                                                                currentPath,
+                                                                ""
+                                                            )
+                                                        }
+                                                    </Text>
+
+                                                    <Text
+                                                        size="sm"
+                                                        c="dimmed"
+                                                    >
+                                                        {
+                                                            (
+                                                                file.size /
+                                                                1024 /
+                                                                1024
+                                                            ).toFixed(2)
+                                                        }
+                                                        {" "}
+                                                        MB
+                                                    </Text>
+                                                    <Text
+                                                        size="xs"
+                                                        c="dimmed"
+                                                        mt={4}
+                                                    >
+                                                        Uploaded:
+                                                        {" "}
+
+                                                        {
+                                                            dayjs(
+                                                                file.last_modified
+                                                            )
+                                                                .tz(
+                                                                    "Asia/Kolkata"
+                                                                )
+                                                                .format(
+                                                                    "DD MMM YYYY hh:mm A"
+                                                                )
+                                                        }
+                                                    </Text>
+                                                </div>
+                                            </Group>
+                                        </div>
+                                    </Card>
                                 )
+                            )
                             }
                         </SimpleGrid>
                     </div>
@@ -906,6 +962,49 @@ function ExplorerPage({ dark, toggleTheme }) {
                         }
                     >
                         Delete
+                    </Button>
+                </Group>
+            </Modal>
+
+            <Modal
+                opened={uploadConfirmOpen}
+                onClose={() =>
+                    setUploadConfirmOpen(false)
+                }
+                title="Upload File"
+                centered
+            >
+                <Text size="sm">
+                    Upload this file to:
+                </Text>
+                <Text fw={700} mt="sm">
+                    {selectedBucket}
+                </Text>
+                <Text size="sm" c="dimmed">
+                    {currentPath || "/"}
+                </Text>
+                <Text mt="md">
+                    {draggedFiles[0]?.name}
+                </Text>
+                <Group justify="flex-end" mt="lg">
+                    <Button
+                        variant="default"
+                        onClick={() =>
+                            setUploadConfirmOpen(false)
+                        }
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        color="orange"
+                        loading={
+                            dragUploadMutation.isPending
+                        }
+                        onClick={() =>
+                            dragUploadMutation.mutate()
+                        }
+                    >
+                        Upload
                     </Button>
                 </Group>
             </Modal>
