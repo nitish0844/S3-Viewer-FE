@@ -8,12 +8,12 @@
     "dev": "vite",
     "build": "vite build",
     "electron": "electron .",
-    "electron:dev": "electron .",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dist": "vite build && electron-builder"
   },
   "build": {
     "appId": "com.pentafox.s3viewer",
-    "productName": "S3 Viewer",
+    "productName": "S3 Hub",
     "compression": "maximum",
     "asar": true,
     "directories": {
@@ -28,9 +28,11 @@
       "!node_modules/.cache/**/*"
     ],
     "mac": {
+      "icon": "build/icons/mac/icon.icns",
       "target": "dmg"
     },
     "win": {
+      "icon": "build/icons/win/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -61,6 +63,7 @@
     ]
   },
   "dependencies": {
+    "@mantine/colors-generator": "^9.6.0",
     "@mantine/core": "^9.1.1",
     "@mantine/dropzone": "^9.1.1",
     "@mantine/hooks": "^9.1.1",
@@ -84,14 +87,17 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
+    "concurrently": "^9.2.4",
     "electron": "^41.5.0",
     "electron-builder": "^26.8.1",
+    "electron-icon-maker": "^0.0.5",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.19",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "wait-on": "^9.1.0"
   }
 }

@@ -14,6 +14,7 @@ import {
     Divider,
     Menu,
     Modal,
+    Tooltip
 } from "@mantine/core";
 
 import { notifications } from "@mantine/notifications";
@@ -42,51 +43,26 @@ import { useAuthStore } from "../store/authStore";
 dayjs.extend(utc);
 dayjs.extend(timezone);
 function ExplorerPage({ dark, toggleTheme }) {
-
     const navigate = useNavigate();
-
-    const sessionId = useAuthStore(
-        (state) => state.sessionId
-    );
-
-    const clearSession = useAuthStore(
-        (state) => state.clearSession
-    );
-
+    const sessionId = useAuthStore((state) => state.sessionId);
+    const clearSession = useAuthStore((state) => state.clearSession);
     const [dragActive, setDragActive] = useState(false);
-
     const [draggedFiles, setDraggedFiles] = useState([]);
-
     const [uploadConfirmOpen, setUploadConfirmOpen] = useState(false);
-
-    const [selectedBucket, setSelectedBucket] =
-        useState(null);
-
-    const [currentPath, setCurrentPath] =
-        useState("");
-
-    const [deleteModalOpen, setDeleteModalOpen] =
-        useState(false);
-
-    const [selectedFile, setSelectedFile] =
-        useState(null);
+    const [selectedBucket, setSelectedBucket] = useState(null);
+    const [currentPath, setCurrentPath] = useState("");
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
 
     const bucketsQuery = useQuery({
         queryKey: ["buckets"],
         enabled: !!sessionId,
         queryFn: async () => {
             try {
-                const response = await api.post(
-                    "/buckets",
-                    {
-                        session_id: sessionId,
-                    }
-                );
+                const response = await api.post("/buckets", { session_id: sessionId });
                 return response.data.buckets;
             } catch (error) {
-                if (
-                    error.response?.status === 401
-                ) {
+                if (error.response?.status === 401) {
                     clearSession();
                     navigate("/");
                 }
@@ -96,15 +72,9 @@ function ExplorerPage({ dark, toggleTheme }) {
     });
 
     useEffect(() => {
-
         const handleDragOver = (e) => {
-
             e.preventDefault();
-
-            if (
-                e.dataTransfer?.types.includes(
-                    "Files"
-                )
+            if (e.dataTransfer?.types.includes("Files")
             ) {
                 setDragActive(true);
             }
@@ -118,39 +88,14 @@ function ExplorerPage({ dark, toggleTheme }) {
             setDragActive(false);
         };
 
-        window.addEventListener(
-            "dragover",
-            handleDragOver
-        );
-
-        window.addEventListener(
-            "drop",
-            handleDrop
-        );
-
-        window.addEventListener(
-            "dragend",
-            handleDragEnd
-        );
-
+        window.addEventListener("dragover", handleDragOver);
+        window.addEventListener("drop", handleDrop);
+        window.addEventListener("dragend", handleDragEnd);
         return () => {
-
-            window.removeEventListener(
-                "dragover",
-                handleDragOver
-            );
-
-            window.removeEventListener(
-                "drop",
-                handleDrop
-            );
-
-            window.removeEventListener(
-                "dragend",
-                handleDragEnd
-            );
+            window.removeEventListener("dragover", handleDragOver);
+            window.removeEventListener("drop", handleDrop);
+            window.removeEventListener("dragend", handleDragEnd);
         };
-
     }, []);
 
     const dragUploadMutation = useMutation({
@@ -160,32 +105,12 @@ function ExplorerPage({ dark, toggleTheme }) {
             }
             const file = draggedFiles[0];
             const formData = new FormData();
-            formData.append(
-                "session_id",
-                sessionId
-            );
-            formData.append(
-                "bucket",
-                selectedBucket
-            );
-            formData.append(
-                "prefix",
-                currentPath
-            );
-            formData.append(
-                "file",
-                file,
-                file.name
-            );
-            const response = await api.post(
-                "/upload",
-                formData,
-                {
-                    headers: {
-                        "Content-Type":
-                            "multipart/form-data",
-                    },
-                }
+            formData.append("session_id", sessionId);
+            formData.append("bucket", selectedBucket);
+            formData.append("prefix", currentPath);
+            formData.append("file", file, file.name);
+            const response = await api.post("/upload", formData,
+                { headers: { "Content-Type": "multipart/form-data", } }
             );
             return response.data;
         },
@@ -209,120 +134,50 @@ function ExplorerPage({ dark, toggleTheme }) {
                 autoClose: 5000,
                 withCloseButton: true,
                 position: "top-right",
-                message:
-                    error?.response?.data?.message ||
-                    error.message ||
-                    "Something went wrong",
+                message: error?.response?.data?.message || error.message || "Something went wrong",
             });
         },
     });
 
     const uploadMutation = useMutation({
         mutationFn: async () => {
-            const files = await window.electronAPI
-                .selectFile();
+            const files = await window.electronAPI.selectFile();
             if (!files.length) {
-                return;
+                return { cancelled: true };
             }
             const filePath = files[0];
-            const fileName =
-                filePath.split("/").pop();
-            // =========================
-            // CHECK FILE EXISTS
-            // =========================
-
+            const fileName = filePath.split("/").pop();
             const fileExists =
-                objectsQuery.data.files.some(
-                    (file) => {
-
-                        const existingName =
-                            file.name.replace(
-                                currentPath,
-                                ""
-                            );
-
-                        return (
-                            existingName === fileName
-                        );
-                    }
+                objectsQuery.data.files.some((file) => {
+                    const existingName = file.name.replace(currentPath, "");
+                    return (existingName === fileName);
+                }
                 );
 
-
-            // =========================
-            // OVERWRITE CONFIRMATION
-            // =========================
-
             if (fileExists) {
-
-                const confirmed =
-                    window.confirm(
-
-                        `File "${fileName}" already exists.\n\nDo you want to overwrite it?`
-                    );
-
+                const confirmed = window.confirm(`File "${fileName}" already exists.\n\nDo you want to overwrite it?`);
                 if (!confirmed) {
                     return;
                 }
             }
+            const formData = new FormData();
+            formData.append("session_id", sessionId);
+            formData.append("bucket", selectedBucket);
+            formData.append("prefix", currentPath);
 
-
-            // =========================
-            // CREATE FORM DATA
-            // =========================
-
-            const formData =
-                new FormData();
-
-            formData.append(
-                "session_id",
-                sessionId
-            );
-
-            formData.append(
-                "bucket",
-                selectedBucket
-            );
-
-            formData.append(
-                "prefix",
-                currentPath
-            );
-
-
-            // =========================
-            // READ FILE
-            // =========================
-
-            const fileBuffer =
-                await window.electronAPI
-                    .readFile(filePath);
-
-            const blob =
-                new Blob([
-                    new Uint8Array(
-                        fileBuffer
-                    )
-                ]);
-
-            formData.append(
-                "file",
-                blob,
-                fileName
-            );
-
-            const response = await api.post(
-                "/upload",
-                formData,
-                {
-                    headers: {
-                        "Content-Type":
-                            "multipart/form-data",
-                    },
-                }
+            const fileBuffer = await window.electronAPI.readFile(filePath);
+            const blob = new Blob([new Uint8Array(fileBuffer)]);
+            formData.append("file", blob, fileName);
+            const response = await api.post("/upload", formData,
+                { headers: { "Content-Type": "multipart/form-data" } }
             );
             return response.data;
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
+            if (data?.cancelled) {
+                return;
+            }
+            
             notifications.show({
                 color: "green",
                 title: "Upload Success",
@@ -340,24 +195,14 @@ function ExplorerPage({ dark, toggleTheme }) {
                 autoClose: 5000,
                 withCloseButton: true,
                 position: "top-right",
-                message:
-                    error?.response?.data?.message ||
-                    error.message ||
-                    "Something went wrong",
+                message: error?.response?.data?.message || error.message || "Something went wrong",
             });
         },
     });
 
     const deleteMutation = useMutation({
         mutationFn: async () => {
-            const response = await api.post(
-                "/delete-file",
-                {
-                    session_id: sessionId,
-                    bucket: selectedBucket,
-                    key: selectedFile.name,
-                }
-            );
+            const response = await api.post("/delete-file", { session_id: sessionId, bucket: selectedBucket, key: selectedFile.name, });
             return response.data;
         },
         onSuccess: () => {
@@ -377,10 +222,7 @@ function ExplorerPage({ dark, toggleTheme }) {
             notifications.show({
                 color: "red",
                 title: "Delete Failed",
-                message:
-                    error?.response?.data?.message ||
-                    error.message ||
-                    "Something went wrong",
+                message: error?.response?.data?.message || error.message || "Something went wrong",
                 autoClose: 5000,
                 withCloseButton: true,
                 position: "top-right"
@@ -388,142 +230,93 @@ function ExplorerPage({ dark, toggleTheme }) {
         },
     });
 
-    // =========================
-    // FETCH OBJECTS
-    // =========================
     const objectsQuery = useQuery({
-        queryKey: [
-            "objects",
-            selectedBucket,
-            currentPath,
-        ],
+        queryKey: ["objects", selectedBucket, currentPath],
         enabled: !!selectedBucket,
         staleTime: 0,
         gcTime: 0,
         refetchOnWindowFocus: false,
         queryFn: async () => {
-            const response = await api.post(
-                "/objects",
-                {
-                    session_id: sessionId,
-                    bucket: selectedBucket,
-                    prefix: currentPath,
-                }
-            );
+            const response = await api.post("/objects", { session_id: sessionId, bucket: selectedBucket, prefix: currentPath, });
             return response.data;
         },
     });
 
-
-    // =========================
-    // BACK FOLDER
-    // =========================
-
     const goBack = () => {
-        // =========================
-        // BACK TO BUCKETS
-        // =========================
-
         if (!currentPath) {
             setSelectedBucket(null);
             return;
         }
-
-
-        // =========================
-        // BACK FOLDER
-        // =========================
-
-        const trimmed =
-            currentPath.endsWith("/")
-
-                ? currentPath.slice(0, -1)
-
-                : currentPath;
-
-        const parts =
-            trimmed.split("/");
-
+        const trimmed = currentPath.endsWith("/") ? currentPath.slice(0, -1) : currentPath;
+        const parts = trimmed.split("/");
         parts.pop();
-
-        const previousPath =
-            parts.length > 0
-
-                ? parts.join("/") + "/"
-
-                : "";
+        const previousPath = parts.length > 0 ? parts.join("/") + "/" : "";
         setCurrentPath(previousPath);
     };
-
-
-    // =========================
-    // OPEN FOLDER
-    // =========================
 
     const openFolder = (folder) => {
         setCurrentPath(folder);
     };
 
+    const TruncatedName = ({ children }) => {
+        return (
+            <Tooltip
+                label={children}
+                withArrow
+                position="top"
+                openDelay={400}
+                disabled={!children}
+            >
+                <Text
+                    fw={700}
+                    style={{
+                        flex: 1,
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        cursor: "default",
+                    }}
+                >
+                    {children}
+                </Text>
+            </Tooltip>
+        );
+    };
 
     return (
-        <AppShellLayout
-            dark={dark}
-            toggleTheme={toggleTheme}
-        >
-
-
+        <AppShellLayout dark={dark} toggleTheme={toggleTheme}>
             {dragActive && (
                 <div
-                    onDragOver={(e) => {
-                        e.preventDefault();
-                    }}
+                    onDragOver={(e) => { e.preventDefault(); }}
                     onDragLeave={(e) => {
-
-                        if (
-                            e.clientX <= 0 ||
-                            e.clientY <= 0 ||
-                            e.clientX >= window.innerWidth ||
-                            e.clientY >= window.innerHeight
-                        ) {
+                        if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
                             setDragActive(false);
                         }
                     }}
                     onDrop={(e) => {
-
                         e.preventDefault();
-
                         setDragActive(false);
-
                         if (!selectedBucket) {
-
                             notifications.show({
                                 color: "red",
                                 title: "No Bucket Selected",
-                                message:
-                                    "Please open a bucket first",
+                                message: "Please open a bucket first",
                             });
-
                             return;
                         }
 
-                        const files =
-                            Array.from(
-                                e.dataTransfer.files
-                            );
-
+                        const files = Array.from(e.dataTransfer.files);
                         if (!files.length) {
                             return;
                         }
-
                         setDraggedFiles(files);
-
                         setUploadConfirmOpen(true);
                     }}
                     style={{
                         position: "fixed",
                         inset: 0,
-                        background:
-                            "rgba(0,0,0,0.75)",
+                        background: "rgba(0,0,0,0.75)",
                         zIndex: 9999,
                         display: "flex",
                         alignItems: "center",
@@ -532,11 +325,7 @@ function ExplorerPage({ dark, toggleTheme }) {
                         backdropFilter: "blur(4px)",
                     }}
                 >
-                    <IconUpload
-                        size={90}
-                        color="white"
-                    />
-
+                    <IconUpload size={90} color="white" />
                     <Text
                         c="white"
                         size="xl"
@@ -547,19 +336,14 @@ function ExplorerPage({ dark, toggleTheme }) {
                     </Text>
                 </div>
             )}
-            <Group
-                justify="space-between"
-                mb="xl"
-            >
+            <Group justify="space-between" mb="xl">
                 <Group gap="xs">
                     {selectedBucket && (
                         <ThemeIcon
                             variant="subtle"
                             size={34}
                             radius="xl"
-                            style={{
-                                cursor: "pointer",
-                            }}
+                            style={{ cursor: "pointer", }}
                             onClick={goBack}
                         >
                             <IconArrowLeft size={20} />
@@ -571,360 +355,302 @@ function ExplorerPage({ dark, toggleTheme }) {
                     </Title>
                 </Group>
 
-
-                {selectedBucket && (
+                {selectedBucket && objectsQuery?.data && (
                     <Button
                         color="orange"
                         leftSection={
-                            <IconUpload
-                                size={16}
-                            />
+                            <IconUpload size={16} />
                         }
-                        loading={
-                            uploadMutation.isPending
-                        }
-                        onClick={() =>
-                            uploadMutation.mutate()
-                        }
+                        loading={uploadMutation.isPending}
+                        onClick={() => uploadMutation.mutate()}
                     >
                         Upload
                     </Button>
-                )
-                }
+                )}
             </Group>
-            {/* ========================= */}
-            {/* BUCKET LOADER */}
-            {/* ========================= */}
 
             {bucketsQuery.isLoading && (
                 <Center mt={100}>
                     <Stack align="center">
-                        <Loader
-                            color="orange"
-                            size="lg"
-                        />
+                        <Loader color="orange" size="lg" />
                         <Text c="dimmed">
                             Loading buckets...
                         </Text>
                     </Stack>
                 </Center>
-            )
-            }
-
-            {/* ========================= */}
-            {/* BUCKETS */}
-            {/* ========================= */}
-
+            )}
             {!selectedBucket && bucketsQuery.data && (
-                <SimpleGrid
-                    cols={3}
-                    spacing="lg"
-                >
-                    {bucketsQuery.data.map(
-                        (bucket) => (
-                            <Card
-                                key={bucket}
-                                shadow="sm"
-                                radius="lg"
-                                padding="lg"
-                                withBorder
+                <SimpleGrid cols={3} spacing="lg">
+                    {bucketsQuery.data.map((bucket) => (
+                        <Card
+                            key={bucket}
+                            shadow="sm"
+                            radius="lg"
+                            padding="lg"
+                            withBorder
+                            style={{
+                                cursor: "pointer",
+                                minHeight: 140,
+                            }}
+                            onDoubleClick={() => {
+                                setSelectedBucket(bucket);
+                                setCurrentPath("");
+                            }}
+                        >
+                            <Group
+                                align="center"
+                                wrap="nowrap"
                                 style={{
-                                    cursor: "pointer",
-                                }}
-                                onDoubleClick={() => {
-                                    setSelectedBucket(bucket);
-                                    setCurrentPath("");
+                                    width: "100%",
+                                    height: "100%",
                                 }}
                             >
-                                <Group>
-                                    <ThemeIcon
-                                        color="orange"
-                                        variant="light"
-                                        size={50}
-                                        radius="xl"
+                                <ThemeIcon
+                                    color="orange"
+                                    variant="light"
+                                    size={50}
+                                    radius="xl"
+                                    style={{
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    <IconFolder size={26} />
+                                </ThemeIcon>
+
+                                <div
+                                    style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                    }}
+                                >
+                                    <TruncatedName>
+                                        {bucket}
+                                    </TruncatedName>
+
+                                    <Text
+                                        size="sm"
+                                        c="dimmed"
                                     >
-                                        <IconFolder
-                                            size={26}
-                                        />
-                                    </ThemeIcon>
-
-                                    <div>
-                                        <Text fw={700}>
-                                            {bucket}
-                                        </Text>
-                                        <Text
-                                            size="sm"
-                                            c="dimmed"
-                                        >
-                                            AWS S3 Bucket
-                                        </Text>
-                                    </div>
-                                </Group>
-                            </Card>
-                        )
-                    )
-                    }
+                                        AWS S3 Bucket
+                                    </Text>
+                                </div>
+                            </Group>
+                        </Card>
+                    ))}
                 </SimpleGrid>
-            )
-            }
+            )}
 
-            {/* ========================= */}
-            {/* OBJECTS LOADER */}
-            {/* ========================= */}
+            {objectsQuery.isLoading && (
+                <Center mt={100}>
+                    <Loader color="orange" size="lg" />
+                </Center>
+            )}
 
-            {
-                objectsQuery.isLoading && (
+            {selectedBucket && objectsQuery.data && (
+                <div>
+                    <Text fw={700} mb="md">
+                        Bucket: {selectedBucket}
+                    </Text>
 
-                    <Center mt={100}>
+                    <Text
+                        size="sm"
+                        c="dimmed"
+                        mb="xl"
+                    >
+                        Path: {currentPath || "/"}
+                    </Text>
 
-                        <Loader
-                            color="orange"
-                            size="lg"
-                        />
+                    <Divider mb="lg" />
 
-                    </Center>
-                )
-            }
+                    <SimpleGrid cols={3} spacing="lg">
+
+                        {/* ========================= */}
+                        {/* FOLDERS */}
+                        {/* ========================= */}
+
+                        {objectsQuery.data.folders.map((folder) => {
+                            const folderName = folder
+                                .replace(currentPath, "")
+                                .replace("/", "");
+
+                            return (
+                                <Card
+                                    key={folder}
+                                    shadow="sm"
+                                    radius="lg"
+                                    padding="lg"
+                                    withBorder
+                                    style={{
+                                        cursor: "pointer",
+                                        minHeight: 140,
+                                    }}
+                                    onDoubleClick={() => openFolder(folder)}
+                                >
+                                    <Group
+                                        align="center"
+                                        wrap="nowrap"
+                                        style={{
+                                            width: "100%",
+                                            height: "100%",
+                                        }}
+                                    >
+                                        <ThemeIcon
+                                            color="orange"
+                                            variant="light"
+                                            size={50}
+                                            radius="xl"
+                                            style={{
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <IconFolder size={26} />
+                                        </ThemeIcon>
+
+                                        <div
+                                            style={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                            }}
+                                        >
+                                            <TruncatedName>
+                                                {folderName}
+                                            </TruncatedName>
+
+                                            <Text
+                                                size="sm"
+                                                c="dimmed"
+                                            >
+                                                Folder
+                                            </Text>
+                                        </div>
+                                    </Group>
+                                </Card>
+                            );
+                        })}
 
 
-            {/* ========================= */}
-            {/* OBJECTS */}
-            {/* ========================= */}
+                        {objectsQuery.data.files.map((file) => {
+                            const fileName = file.name.replace(currentPath, "");
 
-            {
-                selectedBucket &&
-                objectsQuery.data && (
+                            return (
+                                <Card
+                                    key={file.name}
+                                    shadow="sm"
+                                    radius="lg"
+                                    padding="lg"
+                                    withBorder
+                                    style={{ minHeight: 140, }}
+                                >
+                                    <div style={{ position: "relative", width: "100%", height: "100%", }}>
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                top: -4,
+                                                right: -4,
+                                                zIndex: 10,
+                                            }}
+                                        >
+                                            <Menu shadow="md" width={180}>
+                                                <Menu.Target>
+                                                    <ThemeIcon
+                                                        variant="subtle"
+                                                        style={{ cursor: "pointer", }}
+                                                    >
+                                                        <IconDotsVertical size={18} />
+                                                    </ThemeIcon>
+                                                </Menu.Target>
 
-                    <div>
+                                                <Menu.Dropdown>
+                                                    <Menu.Item
+                                                        color="red"
+                                                        leftSection={<IconTrash size={16} />}
+                                                        onClick={() => {
+                                                            setSelectedFile(file);
+                                                            setDeleteModalOpen(true);
+                                                        }}
+                                                    >
+                                                        Delete
+                                                    </Menu.Item>
+                                                </Menu.Dropdown>
+                                            </Menu>
+                                        </div>
 
-                        <Text
-                            fw={700}
-                            mb="md"
-                        >
-                            Bucket: {selectedBucket}
+                                        {/* FILE CONTENT */}
+                                        <Group
+                                            align="center"
+                                            wrap="nowrap"
+                                            style={{
+                                                width: "100%",
+                                                height: "100%",
+                                                paddingRight: 28,
+                                            }}
+                                        >
+                                            <ThemeIcon
+                                                color="blue"
+                                                variant="light"
+                                                size={50}
+                                                radius="xl"
+                                                style={{ flexShrink: 0, }}
+                                            >
+                                                <IconFile size={24} />
+                                            </ThemeIcon>
+
+                                            <div style={{ flex: 1, minWidth: 0, }} >
+                                                <TruncatedName>
+                                                    {fileName}
+                                                </TruncatedName>
+
+                                                <Text size="sm" c="dimmed">
+                                                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                                                </Text>
+
+                                                <Text
+                                                    size="xs"
+                                                    c="dimmed"
+                                                    mt={4}
+                                                >
+                                                    Uploaded:{" "}
+                                                    {dayjs(file.last_modified).tz("Asia/Kolkata").format("DD MMM YYYY hh:mm A")}
+                                                </Text>
+                                            </div>
+                                        </Group>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </SimpleGrid>
+                </div>
+            )}
+
+            {selectedBucket && objectsQuery.isError && (
+                <Center mt={100}>
+                    <Stack align="center">
+                        <Text fw={700} c="red">
+                            Unable to access this bucket
                         </Text>
-
 
                         <Text
                             size="sm"
                             c="dimmed"
-                            mb="xl"
+                            ta="center"
+                            maw={600}
                         >
-                            Path: {currentPath || "/"}
+                            {objectsQuery.error?.response?.data?.detail || objectsQuery.error?.response?.data?.message || "You do not have permission to access this bucket."}
                         </Text>
-
-
-                        <Divider mb="lg" />
-
-
-                        <SimpleGrid
-                            cols={3}
-                            spacing="lg"
+                        <Button
+                            variant="light"
+                            color="orange"
+                            onClick={() => objectsQuery.refetch()}
                         >
-
-                            {/* FOLDERS */}
-
-                            {
-                                objectsQuery.data.folders.map(
-                                    (folder) => (
-
-                                        <Card
-                                            key={folder}
-                                            shadow="sm"
-                                            radius="lg"
-                                            padding="lg"
-                                            withBorder
-                                            style={{
-                                                cursor: "pointer",
-                                            }}
-                                            onDoubleClick={() =>
-                                                openFolder(folder)
-                                            }
-                                        >
-
-                                            <Group>
-
-                                                <ThemeIcon
-                                                    color="orange"
-                                                    variant="light"
-                                                    size={50}
-                                                    radius="xl"
-                                                >
-
-                                                    <IconFolder
-                                                        size={26}
-                                                    />
-
-                                                </ThemeIcon>
-
-
-                                                <div>
-
-                                                    <Text fw={700}>
-
-                                                        {
-                                                            folder
-                                                                .replace(
-                                                                    currentPath,
-                                                                    ""
-                                                                )
-                                                                .replace(
-                                                                    "/",
-                                                                    ""
-                                                                )
-                                                        }
-                                                    </Text>
-
-                                                    <Text
-                                                        size="sm"
-                                                        c="dimmed"
-                                                    >
-                                                        Folder
-                                                    </Text>
-
-                                                </div>
-
-                                            </Group>
-
-                                        </Card>
-                                    )
-                                )
-                            }
-
-
-                            {/* FILES */}
-
-                            {objectsQuery.data.files.map(
-                                (file) => (
-                                    <Card
-                                        key={file.name}
-                                        shadow="sm"
-                                        radius="lg"
-                                        padding="lg"
-                                        withBorder
-                                    >
-                                        <div
-                                            style={{
-                                                position: "relative",
-                                            }}
-                                        >
-                                            {/* TOP RIGHT MENU */}
-                                            <div
-                                                style={{
-                                                    position: "absolute",
-                                                    top: 0,
-                                                    right: 0,
-                                                    zIndex: 10,
-                                                }}
-                                            >
-                                                <Menu
-                                                    shadow="md"
-                                                    width={180}
-                                                >
-                                                    <Menu.Target>
-                                                        <ThemeIcon
-                                                            variant="subtle"
-                                                            style={{
-                                                                cursor: "pointer",
-                                                            }}
-                                                        >
-                                                            <IconDotsVertical size={18} />
-                                                        </ThemeIcon>
-                                                    </Menu.Target>
-                                                    <Menu.Dropdown>
-                                                        <Menu.Item
-                                                            color="red"
-                                                            leftSection={
-                                                                <IconTrash
-                                                                    size={16}
-                                                                />
-                                                            }
-                                                            onClick={() => {
-                                                                setSelectedFile(
-                                                                    file
-                                                                );
-                                                                setDeleteModalOpen(
-                                                                    true
-                                                                );
-                                                            }}
-                                                        >
-                                                            Delete
-                                                        </Menu.Item>
-                                                    </Menu.Dropdown>
-                                                </Menu>
-                                            </div>
-                                            {/* FILE CONTENT */}
-
-                                            <Group align="flex-start" >
-                                                <ThemeIcon
-                                                    color="blue"
-                                                    variant="light"
-                                                    size={50}
-                                                    radius="xl"
-                                                >
-                                                    <IconFile size={24} />
-                                                </ThemeIcon>
-
-                                                <div>
-                                                    <Text fw={700}>
-                                                        {
-                                                            file.name.replace(
-                                                                currentPath,
-                                                                ""
-                                                            )
-                                                        }
-                                                    </Text>
-
-                                                    <Text
-                                                        size="sm"
-                                                        c="dimmed"
-                                                    >
-                                                        {
-                                                            (
-                                                                file.size /
-                                                                1024 /
-                                                                1024
-                                                            ).toFixed(2)
-                                                        }
-                                                        {" "}
-                                                        MB
-                                                    </Text>
-                                                    <Text
-                                                        size="xs"
-                                                        c="dimmed"
-                                                        mt={4}
-                                                    >
-                                                        Uploaded:
-                                                        {" "}
-
-                                                        {
-                                                            dayjs(
-                                                                file.last_modified
-                                                            )
-                                                                .tz(
-                                                                    "Asia/Kolkata"
-                                                                )
-                                                                .format(
-                                                                    "DD MMM YYYY hh:mm A"
-                                                                )
-                                                        }
-                                                    </Text>
-                                                </div>
-                                            </Group>
-                                        </div>
-                                    </Card>
-                                )
-                            )
-                            }
-                        </SimpleGrid>
-                    </div>
-                )}
+                            Retry
+                        </Button>
+                    </Stack>
+                </Center>
+            )}
 
             <Modal
                 opened={deleteModalOpen}
-                onClose={() =>
-                    setDeleteModalOpen(false)
-                }
+                onClose={() => setDeleteModalOpen(false)}
                 title="Delete File"
                 centered
             >
@@ -936,30 +662,19 @@ function ExplorerPage({ dark, toggleTheme }) {
                     mt="sm"
                     mb="lg"
                 >
-                    {
-                        selectedFile?.name.replace(
-                            currentPath,
-                            ""
-                        )
-                    }
+                    {selectedFile?.name.replace(currentPath, "")}
                 </Text>
                 <Group justify="flex-end">
                     <Button
                         variant="default"
-                        onClick={() =>
-                            setDeleteModalOpen(false)
-                        }
+                        onClick={() => setDeleteModalOpen(false)}
                     >
                         Cancel
                     </Button>
                     <Button
                         color="red"
-                        loading={
-                            deleteMutation.isPending
-                        }
-                        onClick={() =>
-                            deleteMutation.mutate()
-                        }
+                        loading={deleteMutation.isPending}
+                        onClick={() => deleteMutation.mutate()}
                     >
                         Delete
                     </Button>
@@ -968,9 +683,7 @@ function ExplorerPage({ dark, toggleTheme }) {
 
             <Modal
                 opened={uploadConfirmOpen}
-                onClose={() =>
-                    setUploadConfirmOpen(false)
-                }
+                onClose={() => setUploadConfirmOpen(false)}
                 title="Upload File"
                 centered
             >
@@ -989,20 +702,14 @@ function ExplorerPage({ dark, toggleTheme }) {
                 <Group justify="flex-end" mt="lg">
                     <Button
                         variant="default"
-                        onClick={() =>
-                            setUploadConfirmOpen(false)
-                        }
+                        onClick={() => setUploadConfirmOpen(false)}
                     >
                         Cancel
                     </Button>
                     <Button
                         color="orange"
-                        loading={
-                            dragUploadMutation.isPending
-                        }
-                        onClick={() =>
-                            dragUploadMutation.mutate()
-                        }
+                        loading={dragUploadMutation.isPending}
+                        onClick={() => dragUploadMutation.mutate()}
                     >
                         Upload
                     </Button>

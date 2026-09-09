@@ -4,420 +4,296 @@ import path from "path";
 import keytar from "keytar";
 import { fileURLToPath } from "url";
 import fs from "fs";
-
 import pkg from "electron-updater";
 
 const { autoUpdater } = pkg;
 
+app.disableHardwareAcceleration();
+
 autoUpdater.autoDownload = false;
-// =========================
-// PATHS
-// =========================
 
-const __filename =
-  fileURLToPath(
-    import.meta.url
-  );
-
-const __dirname =
-  path.dirname(
-    __filename
-  );
-
-
-// =========================
-// GLOBAL WINDOW
-// =========================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let mainWindow;
 
-// =========================
+// ======================================================
 // FILE PICKER
-// =========================
+// ======================================================
 
-ipcMain.handle(
-  "select-file",
+ipcMain.handle("select-file", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+  });
 
-  async () => {
+  return result.filePaths;
+});
 
-    const result =
-      await dialog
-        .showOpenDialog({
+// ======================================================
+// AWS KEYCHAIN
+// ======================================================
 
-          properties: [
-            "openFile"
-          ],
+ipcMain.handle("get-aws-keychain", async () => {
+  return new Promise((resolve, reject) => {
+    exec(
+      `security find-internet-password -s s3.amazonaws.com -g`,
+      (error, stdout, stderr) => {
+        if (error) {
+          console.error(error);
+          reject(error.message);
+          return;
+        }
+
+        // Extract access key
+        const accessKeyMatch = stdout.match(/"acct"<blob>="([^"]+)"/);
+
+        // Extract secret key
+        const secretKeyMatch = stderr.match(/password: "([^"]+)"/);
+
+        resolve({
+          access_key: accessKeyMatch?.[1] || "",
+          secret_key: secretKeyMatch?.[1] || "",
         });
-
-    return result.filePaths;
-  }
-);
-
-
-// =========================
-// GET AWS KEYCHAIN
-// =========================
-
-ipcMain.handle(
-  "get-aws-keychain",
-
-  async () => {
-
-    return new Promise(
-
-      (
-        resolve,
-        reject
-      ) => {
-
-        exec(
-
-          `security find-internet-password -s s3.amazonaws.com -g`,
-
-          (
-            error,
-            stdout,
-            stderr
-          ) => {
-
-            if (error) {
-
-              console.error(
-                error
-              );
-
-              reject(
-                error.message
-              );
-
-              return;
-            }
-
-            // Extract access key
-            const accessKeyMatch =
-              stdout.match(
-
-                /"acct"<blob>="([^"]+)"/
-              );
-
-            // Extract secret key
-            const secretKeyMatch =
-              stderr.match(
-
-                /password: "([^"]+)"/
-              );
-
-            resolve({
-
-              access_key:
-                accessKeyMatch?.[1]
-                || "",
-
-              secret_key:
-                secretKeyMatch?.[1]
-                || "",
-            });
-          }
-        );
-      }
-    );
-  }
-);
-
-
-// =========================
-// SESSION STORAGE
-// =========================
-
-ipcMain.handle(
-  "save-session",
-
-  async (_, data) => {
-
-    await keytar
-      .setPassword(
-
-        "s3-explorer-session",
-
-        data.access_key,
-
-        data.session_id
-      );
-
-    return true;
-  }
-);
-
-
-ipcMain.handle(
-  "get-session",
-
-  async (_, access_key) => {
-
-    const session =
-      await keytar
-        .getPassword(
-
-          "s3-explorer-session",
-
-          access_key
-        );
-
-    return session;
-  }
-);
-
-
-ipcMain.handle(
-  "delete-session",
-
-  async (_, access_key) => {
-
-    await keytar
-      .deletePassword(
-
-        "s3-explorer-session",
-
-        access_key
-      );
-
-    return true;
-  }
-);
-
-
-// =========================
-// READ FILE
-// =========================
-
-ipcMain.handle(
-  "read-file",
-
-  async (_, filePath) => {
-
-    const buffer =
-      fs.readFileSync(
-        filePath
-      );
-
-    return Array.from(
-      buffer
-    );
-  }
-);
-
-
-// =========================
-// START UPDATE
-// =========================
-
-ipcMain.handle(
-  "start-update",
-
-  async () => {
-
-    console.log(
-      "Starting update download..."
-    );
-
-    autoUpdater
-      .downloadUpdate();
-  }
-);
-
-
-// =========================
-// INSTALL UPDATE
-// =========================
-
-ipcMain.handle(
-  "install-update",
-
-  async () => {
-
-    console.log(
-      "Installing update..."
-    );
-
-    autoUpdater
-      .quitAndInstall();
-  }
-);
-
-
-// =========================
-// CREATE WINDOW
-// =========================
-function createWindow() {
-
-  mainWindow =
-    new BrowserWindow({
-
-      width: 1200,
-
-      height: 800,
-
-      webPreferences: {
-
-        preload: path.join(
-          __dirname,
-          "preload.cjs"
-        ),
-
-        contextIsolation: true,
-
-        nodeIntegration: false,
       },
+    );
+  });
+});
+
+// ======================================================
+// SESSION - SAVE
+// ======================================================
+
+ipcMain.handle("save-session", async (_, data) => {
+  await keytar.setPassword(
+    "s3-explorer-session",
+    data.access_key,
+    data.session_id,
+  );
+
+  return true;
+});
+
+// ======================================================
+// SESSION - GET
+// ======================================================
+
+ipcMain.handle("get-session", async (_, access_key) => {
+  const session = await keytar.getPassword("s3-explorer-session", access_key);
+
+  return session;
+});
+
+// ======================================================
+// SESSION - DELETE
+// ======================================================
+
+ipcMain.handle("delete-session", async (_, access_key) => {
+  await keytar.deletePassword("s3-explorer-session", access_key);
+
+  return true;
+});
+
+// ======================================================
+// READ FILE
+// ======================================================
+
+ipcMain.handle("read-file", async (_, filePath) => {
+  const buffer = fs.readFileSync(filePath);
+
+  return Array.from(buffer);
+});
+
+// ======================================================
+// APPLICATION UPDATE
+// ======================================================
+//
+// Flow:
+//
+// React
+//   ↓
+// updateApplication()
+//   ↓
+// checkForUpdates()
+//   ↓
+// update-available
+//   ↓
+// downloadUpdate()
+//   ↓
+// update-downloaded
+//   ↓
+// quitAndInstall()
+//
+
+ipcMain.handle("update-application", async () => {
+  try {
+    console.log("Checking for updates...");
+
+    await autoUpdater.checkForUpdates();
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Update check failed:", error);
+
+    mainWindow?.webContents.send("update-error", {
+      message: error.message,
     });
 
+    return {
+      success: false,
+      message: error.message,
+    };
+  }
+});
 
-  const isDev =
-    !app.isPackaged;
+// ======================================================
+// CREATE WINDOW
+// ======================================================
 
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  const isDev = !app.isPackaged;
 
   if (isDev) {
+    mainWindow.webContents.openDevTools();
 
-    mainWindow
-      .webContents
-      .openDevTools();
-
-    mainWindow
-      .loadURL(
-        "http://localhost:5173"
-      );
-
+    mainWindow.loadURL("http://localhost:5173");
   } else {
-
-    mainWindow
-      .loadFile(
-
-        path.join(
-          app.getAppPath(),
-          "dist/index.html"
-        )
-      );
+    mainWindow.loadFile(path.join(app.getAppPath(), "dist/index.html"));
   }
 }
 
+// ======================================================
+// UPDATE - CHECKING
+// ======================================================
 
-// =========================
-// AUTO UPDATER EVENTS
-// =========================
+autoUpdater.on("checking-for-update", () => {
+  console.log("Checking for updates...");
+});
 
-autoUpdater.on(
+// ======================================================
+// UPDATE - AVAILABLE
+// ======================================================
+//
+// An update exists.
+// Automatically start downloading it.
+//
 
-  "checking-for-update",
+autoUpdater.on("update-available", async (info) => {
+  console.log("Update available:", info.version);
 
-  () => {
+  mainWindow?.webContents.send("update-started", {
+    version: info.version,
+  });
 
-    console.log(
-      "Checking for updates..."
-    );
+  try {
+    console.log("Downloading update...");
+
+    await autoUpdater.downloadUpdate();
+  } catch (error) {
+    console.error("Update download failed:", error);
+
+    mainWindow?.webContents.send("update-error", {
+      message: error.message,
+    });
   }
-);
+});
 
+// ======================================================
+// UPDATE - NOT AVAILABLE
+// ======================================================
 
-autoUpdater.on(
+autoUpdater.on("update-not-available", () => {
+  console.log("No updates available");
 
-  "update-available",
+  mainWindow?.webContents.send("update-not-available");
+});
 
-  (info) => {
+// ======================================================
+// UPDATE - DOWNLOAD PROGRESS
+// ======================================================
 
-    console.log(
-      "Update available"
-    );
+autoUpdater.on("download-progress", (progress) => {
+  console.log(`Download progress: ${progress.percent.toFixed(1)}%`);
 
-    console.log(
-      info
-    );
+  mainWindow?.webContents.send("update-progress", progress.percent);
+});
 
-    mainWindow
-      .webContents
-      .send(
-        "update-available"
-      );
-  }
-);
+// ======================================================
+// UPDATE - DOWNLOADED
+// ======================================================
+//
+// Once downloaded, automatically install.
+//
 
+autoUpdater.on("update-downloaded", () => {
+  console.log("Update downloaded");
 
-autoUpdater.on(
+  mainWindow?.webContents.send("update-downloaded");
 
-  "update-not-available",
+  // Give renderer a moment to
+  // receive the event before quitting.
+  setTimeout(() => {
+    autoUpdater.quitAndInstall();
+  }, 1000);
+});
 
-  () => {
+// ======================================================
+// UPDATE - ERROR
+// ======================================================
 
-    console.log(
-      "No updates available"
-    );
-  }
-);
+autoUpdater.on("error", (error) => {
+  console.error("Updater error:", error);
 
+  mainWindow?.webContents.send("update-error", {
+    message: error.message,
+  });
+});
 
-autoUpdater.on(
-
-  "download-progress",
-
-  (progress) => {
-
-    mainWindow
-      .webContents
-      .send(
-
-        "update-progress",
-
-        progress.percent
-      );
-  }
-);
-
-
-autoUpdater.on(
-
-  "update-downloaded",
-
-  () => {
-
-    console.log(
-      "Update downloaded"
-    );
-
-    mainWindow
-      .webContents
-      .send(
-        "update-downloaded"
-      );
-  }
-);
-
-
-autoUpdater.on(
-
-  "error",
-
-  (error) => {
-
-    console.log(
-      "Updater error"
-    );
-
-    console.log(
-      error
-    );
-  }
-);
-
-
-// =========================
+// ======================================================
 // APP READY
-// =========================
+// ======================================================
+//
+// IMPORTANT:
+// We do NOT check for updates here.
+//
+// Updates are checked only when the
+// user clicks the Update button.
+//
 
-app.whenReady().then(
+app.whenReady().then(() => {
+  createWindow();
+});
 
-  () => {
+// ======================================================
+// MACOS
+// ======================================================
 
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
-
-    autoUpdater
-      .checkForUpdates();
   }
-);
+});
+
+// ======================================================
+// WINDOWS / LINUX
+// ======================================================
+
+app.on("window-all-closed", () => {
+  // eslint-disable-next-line no-undef
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
